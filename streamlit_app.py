@@ -18,6 +18,226 @@ st.set_page_config(
     layout="wide",
 )
 
+# ---------- Lock screen (hardcoded 6-digit PIN) ----------
+# TODO: move this to .env (ZIWENA_LOCK_CODE) before sharing/deploying this
+# app anywhere — a hardcoded PIN in source code is fine for local personal
+# use only, not for a publicly reachable deployment.
+LOCK_CODE = "200145"
+
+st.markdown("""
+<style>
+/* ---------- Responsive base ---------- */
+.block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 1rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    max-width: 900px;
+}
+@media (max-width: 640px) {
+    .block-container {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        padding-top: 0.75rem;
+    }
+    h1 { font-size: 1.5rem !important; }
+    [data-testid="stSidebar"] { width: 80vw !important; }
+}
+
+/* ---------- Lock screen ---------- */
+.lock-wrap {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1rem;
+    width: 100%;
+    max-width: 320px;
+}
+.lock-icon {
+    font-size: 2.75rem;
+    margin-bottom: 0.5rem;
+}
+.lock-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+}
+.lock-subtitle {
+    font-size: 0.92rem;
+    opacity: 0.65;
+    margin-bottom: 1.75rem;
+}
+.lock-boxes {
+    display: flex;
+    gap: 0.6rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+}
+.lock-box {
+    width: 40px;
+    height: 48px;
+    border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+.lock-box.filled {
+    border-color: #ffffff;
+}
+.lock-or {
+    font-size: 0.8rem;
+    opacity: 0.5;
+    margin: 0.9rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.1rem;
+}
+.lock-wrap [data-testid="stTextInput"] input {
+    text-align: center;
+    font-size: 1.4rem;
+    letter-spacing: 0.5rem;
+    font-weight: 600;
+    padding: 0.6rem 0.5rem;
+    border-radius: 12px;
+}
+.lock-error {
+    color: #ff6b6b;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    min-height: 1.2rem;
+}
+.lock-keypad {
+    max-width: 260px;
+    margin: 0 auto;
+}
+.lock-keypad .stButton button {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    font-size: 1.3rem;
+    font-weight: 600;
+    padding: 0;
+    margin-bottom: 0.6rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+def render_lock_screen():
+    if "pin_entry" not in st.session_state:
+        st.session_state.pin_entry = ""
+    if "pin_error" not in st.session_state:
+        st.session_state.pin_error = ""
+
+    def check_and_maybe_unlock():
+        if len(st.session_state.pin_entry) == 6:
+            if st.session_state.pin_entry == LOCK_CODE:
+                st.session_state.unlocked = True
+            else:
+                st.session_state.pin_error = "Wrong code. Try again."
+                st.session_state.pin_entry = ""
+
+    def press(digit):
+        if len(st.session_state.pin_entry) < 6:
+            st.session_state.pin_entry += digit
+            st.session_state.pin_error = ""
+        check_and_maybe_unlock()
+
+    def backspace():
+        st.session_state.pin_entry = st.session_state.pin_entry[:-1]
+        st.session_state.pin_error = ""
+
+    def on_text_change():
+        digits = "".join(ch for ch in st.session_state.pin_text_input if ch.isdigit())[:6]
+        st.session_state.pin_entry = digits
+        st.session_state.pin_error = ""
+        check_and_maybe_unlock()
+
+    st.markdown('<div class="lock-wrap">', unsafe_allow_html=True)
+    st.markdown('<div class="lock-icon">🔒</div>', unsafe_allow_html=True)
+    st.markdown('<div class="lock-title">Ziwena is locked</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="lock-subtitle">Enter your 6-digit code to continue</div>',
+        unsafe_allow_html=True,
+    )
+
+    boxes_html = "".join(
+        f'<div class="lock-box{" filled" if i < len(st.session_state.pin_entry) else ""}">'
+        f'{st.session_state.pin_entry[i] if i < len(st.session_state.pin_entry) else ""}'
+        f'</div>'
+        for i in range(6)
+    )
+    st.markdown(f'<div class="lock-boxes">{boxes_html}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="lock-error">{st.session_state.pin_error}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Option 1: clickable numeric keypad
+    st.markdown('<div class="lock-keypad">', unsafe_allow_html=True)
+    rows = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["", "0", "⌫"]]
+    for row in rows:
+        cols = st.columns(3, gap="small")
+        for col, key in zip(cols, row):
+            with col:
+                if key == "":
+                    st.write("")
+                elif key == "⌫":
+                    st.button("⌫", key="lock_back", on_click=backspace, use_container_width=True)
+                else:
+                    st.button(key, key=f"lock_{key}", on_click=press, args=(key,), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Option 2: type the code directly with the keyboard
+    st.markdown('<div class="lock-or">or type it</div>', unsafe_allow_html=True)
+    st.text_input(
+        "code_text",
+        max_chars=6,
+        type="password",
+        label_visibility="collapsed",
+        placeholder="••••••",
+        key="pin_text_input",
+        value=st.session_state.pin_entry,
+        on_change=on_text_change,
+    )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.session_state.unlocked:
+        st.rerun()
+
+
+if "unlocked" not in st.session_state:
+    st.session_state.unlocked = False
+
+if not st.session_state.unlocked:
+    st.markdown("""
+    <style>
+    .block-container {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    header[data-testid="stHeader"] {
+        height: 0;
+    }
+    html, body, [data-testid="stAppViewContainer"] {
+        overflow: hidden !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    render_lock_screen()
+    st.stop()
+# ---------- End lock screen ----------
+
+
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Uses whatever model is in .env; falls back to a generous, currently-stable
 # alias if ZIWENA_MODEL isn't set. See list_models.py to check what your
@@ -286,6 +506,17 @@ st.markdown("""
 }
 div[data-testid="column"]:has([data-testid="stAudioInput"]) {
     margin-left: -8px;
+}
+@media (max-width: 640px) {
+    [data-testid="stAudioInput"] > div {
+        height: 44px;
+    }
+    div[data-testid="column"]:has([data-testid="stAudioInput"]) {
+        margin-left: -4px;
+    }
+    [data-testid="stChatInput"] textarea {
+        font-size: 0.95rem;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
