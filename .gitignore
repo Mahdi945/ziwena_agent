@@ -1,0 +1,35 @@
+.env
+.env.*
+*.env
+credentials.json
+ziwena_calendar_token.json
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+env/
+
+# Streamlit / app runtime
+.streamlit/
+uploads_tmp/
+
+# Local databases / generated content
+ziwena_memory_db/
+*.sqlite3
+*.db
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak

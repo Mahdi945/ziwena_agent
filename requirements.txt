@@ -1,0 +1,21 @@
+python-dotenv>=1.0.0
+google-genai>=1.0.0
+streamlit>=1.30.0
+pillow>=10.0.0
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+
+# Phase 3 — actions (calendar + job search/save)
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# Phase 4 — proactive scheduling
+schedule>=1.2.0
+
+# Phase 5 — voice in/out
+SpeechRecognition>=3.10.0
+pyttsx3>=2.90
+# pyaudio is needed by SpeechRecognition for microphone input.
+# Windows: if `pip install pyaudio` fails, try: pip install pipwin && pipwin install pyaudio
+pyaudio>=0.2.13
