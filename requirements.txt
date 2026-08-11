@@ -14,8 +14,10 @@ google-auth-oauthlib>=1.2.0
 schedule>=1.2.0
 
 # Phase 5 — voice in/out
+numpy>=1.26.0
+sounddevice>=0.4.7
 SpeechRecognition>=3.10.0
 pyttsx3>=2.90
-# pyaudio is needed by SpeechRecognition for microphone input.
-# Windows: if `pip install pyaudio` fails, try: pip install pipwin && pipwin install pyaudio
-pyaudio>=0.2.13
+# Note: pyaudio is intentionally omitted because it fails to build in many
+# hosted Linux environments without system PortAudio headers. This app uses
+# sounddevice for microphone input, which works in deployment environments.
