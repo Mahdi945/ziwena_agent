@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 from datetime import datetime
 
@@ -81,16 +82,17 @@ st.markdown("""
 .lock-box {
     width: 40px;
     height: 48px;
-    border: 2px solid rgba(255,255,255,0.25);
+    border: 2px solid rgba(128,128,128,0.45);
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.3rem;
     font-weight: 700;
+    color: inherit;
 }
 .lock-box.filled {
-    border-color: #ffffff;
+    border-color: currentColor;
 }
 .lock-or {
     font-size: 0.8rem;
@@ -125,6 +127,42 @@ st.markdown("""
     font-weight: 600;
     padding: 0;
     margin-bottom: 0.6rem;
+}
+.lock-keypad [data-testid="stHorizontalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 0.6rem;
+    width: 100%;
+}
+.lock-keypad [data-testid="stHorizontalBlock"] > div {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+    gap: 0.6rem;
+}
+.lock-keypad [data-testid="stColumn"],
+.lock-keypad [data-testid="column"] {
+    width: 33.33% !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+@media (max-width: 640px) {
+    .lock-keypad [data-testid="stHorizontalBlock"],
+    .lock-keypad [data-testid="stHorizontalBlock"] > div {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+    }
+    .lock-keypad [data-testid="stColumn"],
+    .lock-keypad [data-testid="column"] {
+        width: 33.33% !important;
+        flex: 1 1 0 !important;
+    }
+    .lock-keypad .stButton button {
+        font-size: 1.1rem;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -323,6 +361,47 @@ FACTS ABOUT MEHDI:
 """
 
 
+CV_UPLOAD_STATE_FILE = os.path.join(os.path.dirname(__file__), ".cv_upload_state.json")
+
+
+def _load_cv_upload_state():
+    try:
+        with open(CV_UPLOAD_STATE_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _save_cv_upload_state(file_name, cv_path):
+    try:
+        with open(CV_UPLOAD_STATE_FILE, "w") as f:
+            json.dump({
+                "file_name": file_name,
+                "cv_path": cv_path,
+                "cv_mtime": os.path.getmtime(cv_path),
+            }, f)
+    except Exception:
+        pass  # tracking is a best-effort optimization, never fatal
+
+
+def get_or_upload_cv(client, cv_path):
+    """Reuse the previously uploaded CV file on Gemini's servers instead of
+    re-uploading it every app restart. Falls back to a fresh upload if no
+    record exists, the CV file changed, or the remembered file expired."""
+    state = _load_cv_upload_state()
+    if state and state.get("cv_path") == cv_path:
+        if state.get("cv_mtime") == os.path.getmtime(cv_path):
+            try:
+                existing = client.files.get(name=state["file_name"])
+                return existing  # reused — no upload call made
+            except Exception:
+                pass  # file expired or missing on Gemini's side — re-upload below
+
+    uploaded = client.files.upload(file=cv_path)
+    _save_cv_upload_state(uploaded.name, cv_path)
+    return uploaded
+
+
 def init_chat():
     client = genai.Client(api_key=GEMINI_API_KEY)
     st.session_state.genai_client = client  # keep a live reference so it
@@ -345,7 +424,7 @@ def init_chat():
 
     if CV_PATH and os.path.isfile(CV_PATH):
         try:
-            cv_file_ref = client.files.upload(file=CV_PATH)
+            cv_file_ref = get_or_upload_cv(client, CV_PATH)
             chat.send_message([
                 cv_file_ref,
                 "This is my CV. Keep it in mind for the rest of our conversation "
