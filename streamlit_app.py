@@ -788,15 +788,19 @@ with input_col:
         file_type=["png", "jpg", "jpeg", "pdf", "docx", "txt"],
     )
 
+# The audio_input widget's key is rotated every time we've finished handling
+# a voice note. Streamlit keeps a widget's recorded clip alive for as long as
+# its key stays the same, which is why the note was staying "stuck" in the
+# player after being sent. Changing the key mounts a brand-new, empty widget
+# on the next rerun, so the recorder visibly resets once it's been sent.
+st.session_state.setdefault("voice_note_key_seq", 0)
+voice_note_key = f"voice_note_{st.session_state.voice_note_key_seq}"
+
 with mic_col:
-    voice_note = st.audio_input("🎤", label_visibility="collapsed")
+    voice_note = st.audio_input("🎤", label_visibility="collapsed", key=voice_note_key)
 
 # ---------- Handle an uploaded voice note ----------
-if voice_note is not None and voice_note != st.session_state.get("last_voice_note"):
-    st.session_state.last_voice_note = voice_note
-    st.session_state.history.append(("user", "🎤 [voice message]"))
-    with chat_container:
-        st.chat_message("user").write("🎤 [voice message]")
+if voice_note is not None:
     try:
         audio_part = types.Part.from_bytes(
             data=voice_note.getvalue(),
@@ -805,14 +809,32 @@ if voice_note is not None and voice_note != st.session_state.get("last_voice_not
         with st.spinner("Listening to your voice note and replying...", show_time=True):
             response = safe_send([
                 audio_part,
-                "This is a voice message from Mahdi. Transcribe it mentally and "
-                "reply naturally in whatever language he spoke, following your "
-                "usual personality.",
+                "This is a voice message from Mahdi. First transcribe it "
+                "exactly, word for word, in the language he spoke. Then reply "
+                "naturally, following your usual personality. Format your "
+                "entire output as exactly two lines with no extra text:\n"
+                "TRANSCRIPT: <the transcription>\n"
+                "REPLY: <your reply>",
             ])
-        reply = response_text(response)
+        raw = response_text(response)
+        transcript, reply = None, None
+        if "REPLY:" in raw:
+            head, reply = raw.split("REPLY:", 1)
+            reply = reply.strip()
+            transcript = head.split("TRANSCRIPT:", 1)[-1].strip() if "TRANSCRIPT:" in head else head.strip()
+        if not transcript:
+            transcript = "🎤 [voice message]"
+        if not reply:
+            reply = raw.strip()
     except Exception as e:
+        transcript = "🎤 [voice message]"
         reply = f"[Error handling voice message: {e}]"
+
+    st.session_state.history.append(("user", transcript))
     st.session_state.history.append(("assistant", reply))
+    # Rotate the key so the recorder widget resets to empty instead of
+    # continuing to show the just-sent clip.
+    st.session_state.voice_note_key_seq += 1
     st.rerun()
 
 # ---------- Handle files attached via the chat input's paperclip icon ----------
