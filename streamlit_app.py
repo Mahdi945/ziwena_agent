@@ -1,9 +1,11 @@
 import glob
 import json
 import os
+import time
 from datetime import datetime
 
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -128,6 +130,44 @@ st.markdown("""
     padding: 0;
     margin-bottom: 0.6rem;
 }
+
+/* ---------- Skeleton loader ---------- */
+@keyframes ziwena-pulse {
+    0% { opacity: 0.55; }
+    50% { opacity: 1; }
+    100% { opacity: 0.55; }
+}
+.ziwena-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 0;
+}
+.ziwena-skeleton .sk-line {
+    height: 14px;
+    border-radius: 7px;
+    background: rgba(128,128,128,0.25);
+    animation: ziwena-pulse 1.2s ease-in-out infinite;
+}
+.ziwena-skeleton .sk-avatar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.ziwena-skeleton .sk-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(128,128,128,0.3);
+    animation: ziwena-pulse 1.2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+.ziwena-skeleton .sk-bubble {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
 .lock-keypad [data-testid="stHorizontalBlock"] {
     display: flex !important;
     flex-direction: row !important;
@@ -168,25 +208,38 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+def render_skeleton(lines=2, avatar=True):
+    """Render a pulsing skeleton block (used instead of/with a spinner)."""
+    widths = ["70%", "45%", "85%", "60%"]
+    row_html = "".join(
+        f'<div class="sk-line" style="width:{widths[i % len(widths)]}"></div>'
+        for i in range(lines)
+    )
+    if avatar:
+        html = (
+            '<div class="ziwena-skeleton"><div class="sk-avatar-row">'
+            f'<div class="sk-avatar"></div><div class="sk-bubble">{row_html}</div>'
+            '</div></div>'
+        )
+    else:
+        html = f'<div class="ziwena-skeleton">{row_html}</div>'
+    return st.markdown(html, unsafe_allow_html=True)
+
+
 def render_lock_screen():
     if "pin_entry" not in st.session_state:
         st.session_state.pin_entry = ""
     if "pin_error" not in st.session_state:
         st.session_state.pin_error = ""
 
-    def check_and_maybe_unlock():
-        if len(st.session_state.pin_entry) == 6:
-            if st.session_state.pin_entry == LOCK_CODE:
-                st.session_state.unlocked = True
-            else:
-                st.session_state.pin_error = "Wrong code. Try again."
-                st.session_state.pin_entry = ""
-
     def press(digit):
+        # Only append the digit here — do NOT check/unlock yet. If we
+        # unlocked inside this callback, the script would skip straight
+        # past render_lock_screen() on the very next run and the 6th box
+        # would never actually be shown on screen.
         if len(st.session_state.pin_entry) < 6:
             st.session_state.pin_entry += digit
             st.session_state.pin_error = ""
-        check_and_maybe_unlock()
 
     def backspace():
         st.session_state.pin_entry = st.session_state.pin_entry[:-1]
@@ -196,7 +249,6 @@ def render_lock_screen():
         digits = "".join(ch for ch in st.session_state.pin_text_input if ch.isdigit())[:6]
         st.session_state.pin_entry = digits
         st.session_state.pin_error = ""
-        check_and_maybe_unlock()
 
     st.markdown('<div class="lock-wrap">', unsafe_allow_html=True)
     st.markdown('<div class="lock-icon">🔒</div>', unsafe_allow_html=True)
@@ -248,8 +300,19 @@ def render_lock_screen():
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.unlocked:
-        st.rerun()
+    # By this point the 6th box has already been drawn above (with the
+    # digit visible), so it's safe to now check the code and, only after
+    # a brief pause, move on.
+    if len(st.session_state.pin_entry) == 6:
+        if st.session_state.pin_entry == LOCK_CODE:
+            time.sleep(0.35)  # let the last digit register visually first
+            st.session_state.unlocked = True
+            st.rerun()
+        else:
+            time.sleep(0.35)
+            st.session_state.pin_error = "Wrong code. Try again."
+            st.session_state.pin_entry = ""
+            st.rerun()
 
 
 if "unlocked" not in st.session_state:
@@ -281,6 +344,11 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # alias if ZIWENA_MODEL isn't set. See list_models.py to check what your
 # specific key can access if this ever 404s.
 MODEL_NAME = os.getenv("ZIWENA_MODEL", "gemini-flash-lite-latest")
+# Model lineup as of Aug 2026. If the current model gets rate-limited,
+# fall back to these (all currently GA, non-preview) in order. Update this
+# list if Google deprecates any of these — check
+# https://ai.google.dev/gemini-api/docs/models for the current lineup.
+MODEL_FALLBACKS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash"]
 CV_DIR = os.path.join(os.path.dirname(__file__), "cv")
 
 
@@ -331,10 +399,14 @@ WHAT YOU HELP WITH:
 5. General self-improvement, like a friend who checks in and pushes him forward.
 
 WEB SEARCH:
-- You have live Google Search access. Use it whenever a question needs
-  current or real-world info you wouldn't reliably know otherwise.
+- You have live Google Search access and standing permission to use it
+  whenever a question needs current or real-world info — never ask
+  Mahdi for permission first, just search and answer.
 - When you use search results, mention briefly where the info is from.
 - Don't mention searching for basic things you'd already know.
+- The current date/time is given to you directly in context on every
+  message (see "Right now:" below) — never search or ask for today's
+  date, just read it from there.
 
 JOURNAL:
 - Mahdi may keep a structured journal with /journal — reflective entries about
@@ -346,7 +418,11 @@ MEMORY:
   relevant memories from past conversations — use them naturally.
 
 BEHAVIOR RULE:
-- Always tell Mahdi before doing anything and get his confirmation first.
+- Answering questions (including looking things up via search) needs NO
+  permission — just answer directly and naturally, like a friend would.
+- Only ask for confirmation before things that actually change something
+  or commit Mahdi to something: adding a calendar event, saving a memory
+  or journal entry on his behalf, applying to a job, or similar actions.
 
 FACTS ABOUT MEHDI:
 - Hardworking, always wants to improve himself.
@@ -403,36 +479,45 @@ def get_or_upload_cv(client, cv_path):
 
 
 def init_chat():
+    global MODEL_NAME
     client = genai.Client(api_key=GEMINI_API_KEY)
     st.session_state.genai_client = client  # keep a live reference so it
     # never gets garbage-collected between Streamlit reruns
-    try:
-        chat = client.chats.create(
-            model=MODEL_NAME,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-            ),
-        )
-    except Exception as e:
+
+    models_to_try = [MODEL_NAME] + [m for m in MODEL_FALLBACKS if m != MODEL_NAME]
+    chat = None
+    last_error = None
+    for candidate in models_to_try:
+        try:
+            chat = client.chats.create(
+                model=candidate,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
+            if candidate != MODEL_NAME:
+                st.session_state.history = st.session_state.get("history", [])
+                st.session_state.history.append(
+                    ("system", f"[Started Ziwena on '{candidate}' — '{MODEL_NAME}' wasn't available.]")
+                )
+            MODEL_NAME = candidate
+            st.session_state.tried_models = {candidate}
+            break
+        except Exception as e:
+            last_error = e
+            continue
+
+    if chat is None:
         st.error(
-            f"Couldn't start Ziwena with model '{MODEL_NAME}': {e}\n\n"
+            f"Couldn't start Ziwena with model '{MODEL_NAME}' or any fallback: {last_error}\n\n"
             "Run list_models.py to see which model names your API key can "
             "actually access, then set ZIWENA_MODEL in .env accordingly."
         )
         st.stop()
 
     if CV_PATH and os.path.isfile(CV_PATH):
-        try:
-            cv_file_ref = get_or_upload_cv(client, CV_PATH)
-            chat.send_message([
-                cv_file_ref,
-                "This is my CV. Keep it in mind for the rest of our conversation "
-                "whenever it's relevant (job search, applications, interview prep)."
-            ])
-            st.session_state.cv_status = f"Loaded ✅ ({os.path.basename(CV_PATH)})"
-        except Exception as e:
-            st.session_state.cv_status = f"Couldn't load ({e})"
+        st.session_state.cv_status = f"Available but not auto-loaded ({os.path.basename(CV_PATH)})"
     else:
         st.session_state.cv_status = f"Not found in {CV_DIR}"
 
@@ -460,11 +545,80 @@ def build_calendar_prompt(events):
     return "\n".join(lines)
 
 
-def safe_send(parts):
+def _is_quota_error(e) -> bool:
+    s = str(e).lower()
+    return "429" in s or "resource_exhausted" in s or "quota" in s
+
+
+def _is_unavailable_error(e) -> bool:
+    s = str(e).lower()
+    return (
+        _is_quota_error(e)
+        or "404" in s
+        or "not_found" in s
+        or "no longer available" in s
+    )
+
+
+def _switch_to_fallback_model():
+    """Rebuild the chat on the next working model in MODEL_FALLBACKS,
+    carrying the existing conversation history over so context isn't lost.
+    If a candidate itself is unavailable (e.g. deprecated/404), skip it and
+    try the next one rather than failing outright."""
+    global MODEL_NAME
+    tried = st.session_state.get("tried_models", {MODEL_NAME})
+
+    try:
+        history = st.session_state.chat.get_history()
+    except Exception:
+        history = None
+
+    client = st.session_state.genai_client
+
+    for candidate in MODEL_FALLBACKS:
+        if candidate in tried:
+            continue
+        tried.add(candidate)
+        st.session_state.tried_models = tried
+        try:
+            new_chat = client.chats.create(
+                model=candidate,
+                config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+                history=history,
+            )
+        except Exception:
+            continue  # this candidate itself is unavailable — try the next one
+
+        st.session_state.chat = new_chat
+        MODEL_NAME = candidate
+        st.session_state.history.append(
+            ("system", f"[Switched to '{candidate}' — the previous model's free quota was exhausted.]")
+        )
+        return True
+
+    return False  # nothing left to try
+
+
+def response_text(response):
+    """response_text(response) can be None (e.g. a grounded/search turn that only
+    returned metadata) — never let that leak to the user as the string
+    'None'."""
+    text = getattr(response, "text", None)
+    if text:
+        return text
+    return ("Hmm, I got an empty reply back from Gemini that time — can you "
+            "ask that again? (Mahden, 3awed el message.)")
+
+
+def safe_send(parts, _attempt=0):
     """
-    Send a message to the chat, transparently recovering once if the
-    underlying client was closed by a Streamlit rerun. Any real API error
-    (quota, 429, etc.) is re-raised as-is so it displays exactly as Google
+    Send a message to the chat, transparently recovering from:
+      - a client closed by a Streamlit rerun (re-init and retry once)
+      - 429 / quota-exhausted errors (short backoff retry, then fall back
+        to the next model in MODEL_FALLBACKS if retries are still exhausted)
+      - 404 / model-no-longer-available errors (fall back immediately —
+        retrying the same dead model won't help)
+    Any other error is re-raised as-is so it displays exactly as Google
     sent it — no rewording.
     """
     try:
@@ -473,6 +627,19 @@ def safe_send(parts):
         if "client has been closed" in str(e).lower():
             st.session_state.chat = init_chat()
             return st.session_state.chat.send_message(parts)
+
+        if _is_quota_error(e):
+            if _attempt < 2:
+                time.sleep(2 * (_attempt + 1))  # 2s, then 4s backoff
+                return safe_send(parts, _attempt=_attempt + 1)
+            if _switch_to_fallback_model():
+                return safe_send(parts, _attempt=0)
+        elif _is_unavailable_error(e):
+            # 404 / deprecated model — no point retrying the same one,
+            # jump straight to the next fallback.
+            if _switch_to_fallback_model():
+                return safe_send(parts, _attempt=0)
+
         raise
 
 
@@ -481,28 +648,27 @@ def send_with_memory(user_text: str):
     calendar_events = get_cached_calendar()
     calendar_block = build_calendar_prompt(calendar_events)
 
-    blocks = []
+    now = datetime.now()
+    time_block = f"Right now: {now.strftime('%A, %d %B %Y, %H:%M')} (Köthen, Germany time)."
+
+    blocks = [time_block]
     if calendar_block:
         blocks.append(calendar_block)
     if relevant:
         memory_block = "\n".join(f"- {m}" for m in relevant)
         blocks.append(f"Relevant memories from before:\n{memory_block}")
 
-    if blocks:
-        full_message = "\n\n".join(blocks) + f"\n\nMahdi says: {user_text}"
-    else:
-        full_message = user_text
+    full_message = "\n\n".join(blocks) + f"\n\nMahdi says: {user_text}"
 
-    with st.spinner("Ziwena is thinking...", show_time=True):
-        response = safe_send(full_message)
-    memory.add_memory(f"Mahdi said: {user_text}\nZiwena replied: {response.text}")
+    response = safe_send(full_message)
+    memory.add_memory(f"Mahdi said: {user_text}\nZiwena replied: {response_text(response)}")
 
     if memory.needs_compaction():
         status = memory.compact_old_memories(st.session_state.genai_client, MODEL_NAME)
         if status:
             st.session_state.history.append(("system", status))
 
-    return response.text
+    return response_text(response)
 
 
 def render_sidebar():
@@ -536,8 +702,12 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 if "chat" not in st.session_state:
-    with st.spinner("Loading Ziwena... preparing your assistant, memory, and calendar.", show_time=True):
-        st.session_state.chat = init_chat()
+    skeleton_slot = st.empty()
+    with skeleton_slot.container():
+        render_skeleton(lines=3, avatar=True)
+        render_skeleton(lines=2, avatar=True)
+    st.session_state.chat = init_chat()
+    skeleton_slot.empty()
 
 st.markdown("""
 <style>
@@ -568,6 +738,15 @@ with chat_container:
             st.chat_message("assistant").write(message)
         else:
             st.info(message)
+    st.markdown('<div id="ziwena-bottom-anchor"></div>', unsafe_allow_html=True)
+
+components.html("""
+<script>
+    var doc = window.parent.document;
+    var anchor = doc.getElementById("ziwena-bottom-anchor");
+    if (anchor) { anchor.scrollIntoView({behavior: "smooth", block: "end"}); }
+</script>
+""", height=0)
 
 st.markdown("---")
 
@@ -616,6 +795,8 @@ with mic_col:
 if voice_note is not None and voice_note != st.session_state.get("last_voice_note"):
     st.session_state.last_voice_note = voice_note
     st.session_state.history.append(("user", "🎤 [voice message]"))
+    with chat_container:
+        st.chat_message("user").write("🎤 [voice message]")
     try:
         audio_part = types.Part.from_bytes(
             data=voice_note.getvalue(),
@@ -628,7 +809,7 @@ if voice_note is not None and voice_note != st.session_state.get("last_voice_not
                 "reply naturally in whatever language he spoke, following your "
                 "usual personality.",
             ])
-        reply = response.text
+        reply = response_text(response)
     except Exception as e:
         reply = f"[Error handling voice message: {e}]"
     st.session_state.history.append(("assistant", reply))
@@ -641,6 +822,8 @@ attached_text = user_input.text.strip() if user_input else ""
 if attached_files:
     for f in attached_files:
         st.session_state.history.append(("user", f"📎 [attached: {f.name}]"))
+        with chat_container:
+            st.chat_message("user").write(f"📎 [attached: {f.name}]")
         try:
             tmp_path = os.path.join("uploads_tmp", f.name)
             os.makedirs("uploads_tmp", exist_ok=True)
@@ -658,7 +841,7 @@ if attached_files:
                 )
             with st.spinner(f"Reviewing {f.name}...", show_time=True):
                 response = safe_send(parts)
-            reply = response.text
+            reply = response_text(response)
         except Exception as e:
             reply = f"[Error handling file '{f.name}': {e}]"
         st.session_state.history.append(("assistant", reply))
@@ -690,7 +873,7 @@ if attached_text:
             )
             with st.spinner("Checking your journal patterns...", show_time=True):
                 response = safe_send(reflect_prompt)
-            st.session_state.history.append(("assistant", response.text))
+            st.session_state.history.append(("assistant", response_text(response)))
     elif attached_text == "/calendar" or attached_text.startswith("/calendar "):
         days_str = attached_text[len("/calendar"):].strip()
         days = int(days_str) if days_str.isdigit() else 7
@@ -709,6 +892,11 @@ if attached_text:
         st.session_state.history.append(("assistant", status or "[Nothing to compact yet.]"))
     else:
         st.session_state.history.append(("user", attached_text))
+        with chat_container:
+            st.chat_message("user").write(attached_text)
+            thinking_slot = st.empty()
+            with thinking_slot.container():
+                render_skeleton(lines=2, avatar=True)
         try:
             reply = send_with_memory(attached_text)
         except Exception as e:
