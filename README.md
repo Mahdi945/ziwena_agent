@@ -1,41 +1,77 @@
-# Ziwena — Phase 1 (CLI)
+# Ziwena
 
-This folder contains a minimal Phase 1 implementation: a terminal chat loop that loads your Phase 0 personality and sends messages to a model.
+Ziwena is a personal AI life assistant built to feel more like a thoughtful friend than a generic chatbot.
 
-Files added:
-- `ziwena_phase1.py` — the CLI chat program. Reads `ziwena-phase0-mehdi.md` for the system prompt.
-- `requirements.txt` — suggested packages to install.
-- `.env.example` — example environment variables.
+It is designed to help with everyday life, planning, reflection, study, job search, and personal growth in a way that feels personal, honest, and supportive.
 
-Quick start
-1. Copy `.env.example` to `.env` and set `ZIWENA_GEMINI_API_KEY` (or `OPENAI_API_KEY`).
-2. (Optional) set `ZIWENA_MODEL` to your preferred model name.
-3. Create a virtualenv and install deps:
+## What Ziwena does
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-pip install -r requirements.txt
-```
+Ziwena helps with:
 
-4. Run the CLI:
+- Daily planning and organization
+- Personal reflection and journaling
+- Career and job-search support
+- Study and self-improvement guidance
+- Relationship advice with a gentle and realistic tone
+- Memory of important life details and past conversations
+- Calendar awareness and practical scheduling support
 
-```bash
-python ziwena_phase1.py
-```
+## Why this project exists
 
-5. Run the Streamlit app:
+This project is not a generic assistant for everyone. It is built around one person: Mahdi.
 
-```bash
-streamlit run streamlit_app.py
-```
+The goal is to create a companion that understands his routines, ambitions, personality, and life context — and helps him make better decisions without sounding robotic or distant.
 
-The Streamlit UI shows a full agent page with chat, command support, controls, and memory state. It is the recommended path for a polished local deployment.
+It aims to be:
 
-Notes & security
-- If you accidentally pasted a real API key into chat or a public place, rotate it (delete the old key and create a new one) before running the code.
-- The CLI tries `google-generativeai` first, then falls back to `openai` if installed. If neither is installed the script runs in dry-run mode and prints the prompt it would send.
+- Direct but kind
+- Helpful without being overwhelming
+- Personal rather than corporate
+- Realistic, honest, and occasionally funny
 
-Next steps
-- Tweak the system prompt in `ziwena-phase0-mehdi.md` until the personality feels right.
-- Phase 2 will add persistent memory (RAG) using a local vector DB.
+## Core idea
+
+Think of Ziwena as a private life operating system for a busy person:
+
+- it remembers what matters
+- it helps plan what comes next
+- it reflects on patterns in life
+- it supports important decisions
+- it keeps the conversation grounded in the user’s real world
+
+## What makes it different
+
+Unlike a standard chatbot, Ziwena is shaped around:
+
+- personal memory
+- long-term context about the user
+- a specific personality and voice
+- life support across both emotional and practical topics
+- a focus on growth, discipline, and real-world progress
+
+## Example use cases
+
+- “Help me organize my week.”
+- “What should I focus on this month?”
+- “Review my journal entries and tell me what patterns I’m missing.”
+- “Find me meaningful job opportunities that match my profile.”
+- “Help me think clearly about my relationship and what matters most.”
+- “I need direction, not just a vague answer.”
+
+## Project status
+
+This is a personal AI assistant project in active development. It mixes conversation, memory, calendar awareness, and a custom interface so it feels more like a real digital life companion than a basic chat app.
+
+## How to use it
+
+Run the app locally and sign in with the app’s protected access flow. Once unlocked, you can chat with Ziwena, add memories, journaling notes, and ask for support in daily life, learning, and career planning.
+
+## Values behind the project
+
+This project is built around a simple belief:
+
+A good personal assistant should help a person become more organized, more aware, and more intentional — not just answer questions.
+
+---
+
+If you want a cleaner, more premium GitHub homepage version, I can also turn this into a launch-style README with a hero section, badges, screenshots placeholders, and a more polished product presentation.
