@@ -3,7 +3,8 @@
 *.env
 credentials.json
 ziwena_calendar_token.json
-
+ziwena-phase0-mehdi.md
+ziwena-roadmap.md
 # Python cache and virtual environments
 __pycache__/
 *.py[cod]
